@@ -15,8 +15,10 @@ fi
 
 VALHEIM_DEDICATED_SERVER=896660
 VALHEIM_INSTALL_DIR=/home/steam/valheim
-VALHEIM_SERVER_SCRIPT=/home/steam/valheim_server.sh
-VALHEIM_SAVEDIR="/home/steam/${VALHEIM_WORLD}_savedir"
+VALHEIM_WORLD_LC=$(echo $VALHEIM_WORLD | tr '[:upper:]' '[:lower:]')
+VALHEIM_SERVER_SCRIPT="/home/steam/${VALHEIM_WORLD_LC}_valheim_server.sh"
+VALHEIM_SAVEDIR="/home/steam/${VALHEIM_WORLD_LC}_savedir"
+VALHEIM_SYSTEMD_SERVICE="${VALHEIM_WORLD_LC}-valheim-server.service"
 
 # Setup dependencies
 sudo add-apt-repository multiverse
@@ -31,7 +33,7 @@ sudo su - steam <<EOT
 cd ~
 
 # Install valheim
-steamcmd +login anonymous +force_install_dir $VALHEIM_INSTALL_DIR +app_update $VALHEIM_DEDICATED_SERVER +quit
+steamcmd +login anonymous +force_install_dir $VALHEIM_INSTALL_DIR +app_update $VALHEIM_DEDICATED_SERVER validate +quit
 
 # Configure start script
 cat > $VALHEIM_SERVER_SCRIPT << EOF
@@ -58,23 +60,21 @@ export LD_LIBRARY_PATH=\$templdpath
 EOF
 
 chmod +x $VALHEIM_SERVER_SCRIPT
-
-# Replace default script
-rm $VALHEIM_INSTALL_DIR/start_server.sh
-ln -s $VALHEIM_SERVER_SCRIPT $VALHEIM_INSTALL_DIR/start_server.sh
 EOT
 
-sudo bash -c "cat > /etc/systemd/system/valheim-server.service << EOF
+sudo bash -c "cat > /etc/systemd/system/${VALHEIM_SYSTEMD_SERVICE} << EOF
 [Unit]
-Description=Valheim Dedicated Server
+Description=${VALHEIM_WORLD} Valheim Dedicated Server
+Wants=network-online.target
+After=syslog.target network.target nss-lookup.target network-online.target
 
 [Service]
 User=steam
 WorkingDirectory=$VALHEIM_INSTALL_DIR
-ExecStart=${VALHEIM_INSTALL_DIR}/start_server.sh
+ExecStart=$VALHEIM_SERVER_SCRIPT
 
 [Install]
 WantedBy=multi-user.target
 EOF"
 
-sudo systemctl enable --now valheim-server.service
+sudo systemctl enable --now ${VALHEIM_SYSTEMD_SERVICE}
